@@ -1,169 +1,104 @@
 #include <fstream>
-
-#define CMAX 1440
-#define PMAX 2
-
+#include <algorithm>
+#define MAX_ORASE 2
+#define MAX_CURSE 1440
 using namespace std;
-
 ifstream fin("bac.in");
 ofstream fout("bac.out");
-
-int c[PMAX][CMAX], nrc[PMAX], b[2*CMAX], nrb;
-
-int minute(char ora[]);
-
+struct Cursa
+{
+	int destinatie, plecare, sosire;
+	bool finalizata;
+};
+struct Port
+{
+	int nrCurse;
+	Cursa cursa[MAX_CURSE];
+};
+Port port[MAX_ORASE];
+int durataTotala;
+void citestePlecariDinPortul(int);
+void efectueazaCurseleDinPortul(int, int, int&);
 int main()
 {
-	int K, L, A, B, i, p, ok, st, dr, mij;
-	char ora[6];
-
-	fin >> K >> L;
-
-	fin >> A;
-
-	nrc[0] = A;
-
-	for (i = 0; i < A; i++)
-	{
-		fin >> ora;
-		
-		c[0][i] = minute(ora);
-	}
-
-	fin >> B;
-
-	nrc[1] = B;
-
-	for (i = 0; i < B; i++)
-	{
-		fin >> ora;
-		
-		c[1][i] = minute(ora);
-	}
-
+	int durataTraversare, durataImbarcareDebarcare;
+	fin >> durataTraversare >> durataImbarcareDebarcare;
+	durataTotala = durataTraversare + durataImbarcareDebarcare;
+	citestePlecariDinPortul(0);
+	citestePlecariDinPortul(1);
+	int nrPort = port[0].cursa[0].plecare < port[1].cursa[0].plecare ? 0 : 1; 
+	int nrBacuri = 1;
+	efectueazaCurseleDinPortul(
+		nrPort,
+		port[nrPort].cursa[0].plecare,
+		nrBacuri);
+	fout << nrBacuri;
 	fin.close();
-
-	do
-	{
-		// aleg portul din care incep prima cursa
-		if (nrc[0] && nrc[1])
-		{
-			p = c[0][0] < c[1][0] ? 0: 1;
-		}
-		else if (nrc[0])
-		{
-			p = 0;
-		}
-		else if (nrc[1])
-		{
-			p = 1;
-		}
-
-		b[nrb] = c[p][0]+K+L, nrc[p]--;
-
-		for (i = 0; i < nrc[p]; i++)
-		{
-			c[p][i] = c[p][i+1];
-		}
-
-		// dupa prima cursa am ajuns in portul opus
-		p = !p;
-		
-		// caut urm. cursa pe care o pot face din portul p
-		// cu aceeasi barca
-		for (ok = 1; ok && nrc[p];)
-		{
-			st = -1, dr = nrc[p];
-
-			while (dr-st > 1)
-			{
-				mij = st + (dr-st)/2;
-				
-				if (c[p][mij] < b[nrb])
-				{
-					st = mij;
-				}
-				else
-				{
-					dr = mij;
-				}
-			}
-
-			if (dr == nrc[p] || c[p][dr] < b[nrb])
-			{
-				ok = 0;
-			}
-			else
-			{
-				b[nrb] = c[p][dr]+K+L, nrc[p]--;
-
-				for (i = dr; i < nrc[p]; i++)
-				{
-					c[p][i] = c[p][i+1];
-				}
-
-				// dupa cursa am ajuns in portul opus
-				p = !p;
-			}
-		}
-
-		// nu mai pot face nicio cursa in portul p
-		// caut urm. cursa pe care o pot face din portul opus (!p)
-		// cu aceeasi barca
-		for (ok = 1; ok && nrc[!p];)
-		{
-			st = -1, dr = nrc[!p];
-		
-			while (dr-st > 1)
-			{
-				mij = st + (dr-st)/2;
-
-				if (c[!p][mij] < b[nrb]+K)
-				{
-					st = mij;
-				}
-				else
-				{
-					dr = mij;
-				}
-			}
-
-			if (dr == nrc[!p] || c[!p][dr] < b[nrb]+K)
-			{
-				ok = 0;
-			}
-			else
-			{
-				b[nrb] = c[!p][dr]+K+L, nrc[!p]--;
-
-				for (i = dr; i < nrc[!p]; i++)
-				{
-					c[!p][i] = c[!p][i+1];
-				}
-			}
-		}
-		
-		// nu mai pot face nicio cursa cu aceasta barca
-		nrb++;
-	}
-	while(nrc[0] || nrc[1]);
-
-	fout << nrb;
-	
 	fout.close();
-
 	return 0;
 }
-
-// convertesc ora din format HH:MM in minute
-int minute(char ora[6])
+bool maiPotFaceCurseDinPortul(int nrPort, int ora)
 {
-	int HH, MM;
-
-	HH = (ora[0]-'0')*10 + (ora[1]-'0');
-
-	MM = (ora[3]-'0')*10 + (ora[4]-'0');
-
-	return HH*60 + MM;
+	if (port[nrPort].cursa[0].finalizata == 0
+	    && port[nrPort].cursa[0].plecare >= ora)
+		return 1;
+	return 0;
 }
-// scor 40
+bool comparCurse(Cursa a, Cursa b)
+{
+	if (!a.finalizata && !b.finalizata)
+	{
+		if (a.plecare < b.plecare)
+			return 1;
+		return 0;
+	}
+	if (!a.finalizata)
+		return 1;
+	return 0;
+}
+void efectueazaCurseleDinPortul(int nrPort, int oraCurenta, int& nrBacuri)
+{
+	sort(port[nrPort].cursa,
+	     port[nrPort].cursa + port[nrPort].nrCurse,
+	     comparCurse);
+	if (maiPotFaceCurseDinPortul(nrPort, oraCurenta))
+	{
+		port[nrPort].cursa[0].finalizata = 1;
+		efectueazaCurseleDinPortul(
+			!nrPort,
+		        port[nrPort].cursa[0].sosire,
+			nrBacuri);
+		if (maiPotFaceCurseDinPortul(
+			!nrPort,
+			port[!nrPort].cursa[0].plecare))
+		{
+			nrBacuri++;
+			efectueazaCurseleDinPortul(
+				!nrPort,
+				port[!nrPort].cursa[0].plecare,
+				nrBacuri);
+		}
+	}
+}
+int minute(char* ora)
+{
+	// converteste ora din format "HH:MM" in minute
+	int hh, mm;
+	hh = (ora[0]-'0')*10 + (ora[1]-'0');	
+	mm = (ora[3]-'0')*10 + (ora[4]-'0');
+	return hh*60 + mm;
+}
+void citestePlecariDinPortul(int nrPort)
+{
+	int i;
+	char oraPlecare[6];
+	fin >> port[nrPort].nrCurse;
+	for (i = 0; i < port[nrPort].nrCurse; i++)
+	{
+		fin >> oraPlecare;
+		port[nrPort].cursa[i].destinatie = !nrPort;
+		port[nrPort].cursa[i].plecare = minute(oraPlecare);
+		port[nrPort].cursa[i].sosire = port[nrPort].cursa[i].plecare + durataTotala;
+		port[nrPort].cursa[i].finalizata = 0;
+	}
+}
