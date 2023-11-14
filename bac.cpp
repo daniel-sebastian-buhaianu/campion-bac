@@ -1,104 +1,137 @@
 #include <fstream>
-#include <algorithm>
-#define MAX_ORASE 2
-#define MAX_CURSE 1440
+#define COD_ORAS_A 0
+#define COD_ORAS_B 1
+#define NR_ORASE 2
 using namespace std;
 ifstream fin("bac.in");
 ofstream fout("bac.out");
-struct Cursa
-{
-	int destinatie, plecare, sosire;
-	bool finalizata;
-};
-struct Port
-{
-	int nrCurse;
-	Cursa cursa[MAX_CURSE];
-};
-Port port[MAX_ORASE];
-int durataTotala;
-void citestePlecariDinPortul(int);
-void efectueazaCurseleDinPortul(int, int, int&);
+struct Plecare { int timpPlecare, timpSosire; Plecare *prec, *urm; };
+struct ListaPlecari { Plecare *prima, *ultima; };
+int durataDeCalatorie;
+ListaPlecari L[NR_ORASE];
+void calculeazaDurataDeCalatorie(int, int);
+void citestePlecariDinOrasul(bool);
+void calculeazaNumarulMinimDeBacuriNecesare(int &);
 int main()
 {
-	int durataTraversare, durataImbarcareDebarcare;
-	fin >> durataTraversare >> durataImbarcareDebarcare;
-	durataTotala = durataTraversare + durataImbarcareDebarcare;
-	citestePlecariDinPortul(0);
-	citestePlecariDinPortul(1);
-	int nrPort = port[0].cursa[0].plecare < port[1].cursa[0].plecare ? 0 : 1; 
-	int nrBacuri = 1;
-	efectueazaCurseleDinPortul(
-		nrPort,
-		port[nrPort].cursa[0].plecare,
-		nrBacuri);
-	fout << nrBacuri;
+	int durataDeTraversare, durataDeImbarcareSiDebarcare, nrBacuri;
+	fin >> durataDeTraversare >> durataDeImbarcareSiDebarcare;
+	calculeazaDurataDeCalatorie(durataDeTraversare, durataDeImbarcareSiDebarcare);
+	citestePlecariDinOrasul(COD_ORAS_A);
+	citestePlecariDinOrasul(COD_ORAS_B);
 	fin.close();
+	calculeazaNumarulMinimDeBacuriNecesare(nrBacuri);
+	fout << nrBacuri;
 	fout.close();
 	return 0;
 }
-bool maiPotFaceCurseDinPortul(int nrPort, int ora)
+int orasulDePlecare()
 {
-	if (port[nrPort].cursa[0].finalizata == 0
-	    && port[nrPort].cursa[0].plecare >= ora)
-		return 1;
-	return 0;
+	if (L[COD_ORAS_A].prima && L[COD_ORAS_B].prima)
+		return L[COD_ORAS_A].prima->timpPlecare < L[COD_ORAS_B].prima->timpPlecare
+		       ? COD_ORAS_A
+		       : COD_ORAS_B;
+	if (L[COD_ORAS_A].prima)
+		return COD_ORAS_A;
+	if (L[COD_ORAS_B].prima)
+		return COD_ORAS_B;
+	return -1;
 }
-bool comparCurse(Cursa a, Cursa b)
+void scoatePlecareaDePeLista(Plecare * p, ListaPlecari & L)
 {
-	if (!a.finalizata && !b.finalizata)
+	if (L.prima == p && p == L.ultima)
+		L.prima = L.ultima = 0;
+	else if (L.prima == p)
 	{
-		if (a.plecare < b.plecare)
-			return 1;
-		return 0;
+		L.prima = L.prima->urm;
+		L.prima->prec = 0;
 	}
-	if (!a.finalizata)
-		return 1;
-	return 0;
-}
-void efectueazaCurseleDinPortul(int nrPort, int oraCurenta, int& nrBacuri)
-{
-	sort(port[nrPort].cursa,
-	     port[nrPort].cursa + port[nrPort].nrCurse,
-	     comparCurse);
-	if (maiPotFaceCurseDinPortul(nrPort, oraCurenta))
+	else if (L.ultima == p)
 	{
-		port[nrPort].cursa[0].finalizata = 1;
-		efectueazaCurseleDinPortul(
-			!nrPort,
-		        port[nrPort].cursa[0].sosire,
-			nrBacuri);
-		if (maiPotFaceCurseDinPortul(
-			!nrPort,
-			port[!nrPort].cursa[0].plecare))
+		L.ultima = L.ultima->prec;
+		L.ultima->urm = 0;
+	}
+	else
+	{
+		p->prec->urm = p->urm;
+		p->urm->prec = p->prec;
+	}
+	delete p;
+}
+bool efectueazaPrimaPlecareDinOrasDupaOra(int & timpCurent, bool oras)
+{
+	for (Plecare *p = L[oras].prima; p; p = p->urm)
+		if (p->timpPlecare >= timpCurent)
 		{
-			nrBacuri++;
-			efectueazaCurseleDinPortul(
-				!nrPort,
-				port[!nrPort].cursa[0].plecare,
-				nrBacuri);
+			timpCurent = p->timpSosire;
+			scoatePlecareaDePeLista(p, L[oras]);
+			return 1;
 		}
+	return 0;
+}
+void efectueazaPlecarileDinOrasul(bool oras)
+{
+	int timpCurent = L[oras].prima->timpPlecare;
+	while (efectueazaPrimaPlecareDinOrasDupaOra(timpCurent, oras))
+		oras = !oras;
+}
+void calculeazaNumarulMinimDeBacuriNecesare(int & nrBacuri)
+{
+	nrBacuri = 0;
+	int orasPlecare = orasulDePlecare();
+	while (orasPlecare >= 0)
+	{
+		nrBacuri++;
+		efectueazaPlecarileDinOrasul(orasPlecare);
+		orasPlecare = orasulDePlecare();
 	}
+}
+void insereazaInListaDePlecari(bool oras, int timp)
+{
+	Plecare *p = new Plecare;
+	p->timpPlecare = timp;
+	p->timpSosire = timp + durataDeCalatorie;
+	p->prec = p->urm = 0;
+	if (!L[oras].ultima)
+		L[oras].prima = L[oras].ultima = p;
+	else
+	{
+		p->prec = L[oras].ultima;
+		L[oras].ultima->urm = p;
+		L[oras].ultima = p;
+	}
+}
+void initializeazaListaDePlecariDinOrasul(bool oras)
+{
+	L[oras].prima = L[oras].ultima = 0;
 }
 int minute(char* ora)
 {
 	// converteste ora din format "HH:MM" in minute
 	int hh, mm;
-	hh = (ora[0]-'0')*10 + (ora[1]-'0');	
+	hh = (ora[0]-'0')*10 + (ora[1]-'0');
 	mm = (ora[3]-'0')*10 + (ora[4]-'0');
 	return hh*60 + mm;
 }
-void citestePlecariDinPortul(int nrPort)
+void citestePlecariDinOrasul(bool oras)
 {
-	int i;
+	int nrPlecari, i;
 	char oraPlecare[6];
-	fin >> port[nrPort].nrCurse;
-	for (i = 0; i < port[nrPort].nrCurse; i++)
+	initializeazaListaDePlecariDinOrasul(oras);
+	fin >> nrPlecari;
+	for (i = 0; i < nrPlecari; i++)
 	{
 		fin >> oraPlecare;
-		port[nrPort].cursa[i].destinatie = !nrPort;
-		port[nrPort].cursa[i].plecare = minute(oraPlecare);
-		port[nrPort].cursa[i].sosire = port[nrPort].cursa[i].plecare + durataTotala;
-		port[nrPort].cursa[i].finalizata = 0;
+		insereazaInListaDePlecari(oras, minute(oraPlecare));
 	}
 }
+void calculeazaDurataDeCalatorie(int durataDeTraversare, int durataDeImbarcareSiDebarcare)
+{
+	durataDeCalatorie = durataDeTraversare + durataDeImbarcareSiDebarcare;
+}
+/*void afiseazaListaDePlecariDinOrasul(bool oras)
+{
+	for (Plecare *p = L[oras].prima; p; p = p->urm)
+		fout << p->timpPlecare << ' ';
+	fout << '\n';
+}*/
